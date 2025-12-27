@@ -20,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Add macro for common timestamp and tracking columns
+
         Blueprint::macro('commonColumns', function () {
             $this->timestamps();
             $this->timestamp('archived_at')->nullable();
@@ -35,7 +35,6 @@ class AppServiceProvider extends ServiceProvider
             $this->timestamp('archived_at')->nullable();
         });
 
-        // indexes for better query performance
         Blueprint::macro('commonColumnsWithIndexes', function () {
             $this->timestamps();
             $this->timestamp('archived_at')->nullable()->index();
@@ -43,7 +42,7 @@ class AppServiceProvider extends ServiceProvider
             $this->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $this->foreignId('archived_by')->nullable()->constrained('users')->nullOnDelete();
 
-            // indexes for frequently queried columns
+
             $this->index(['created_at', 'updated_at']);
         });
     }
