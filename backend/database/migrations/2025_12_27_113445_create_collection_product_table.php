@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -15,12 +14,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('collection_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->timestamps();
+            $table->integer('position')->default(0);
+            $table->timestamp('added_at')->useCurrent();
 
-            // Indexes for performance - critical for large-scale operations
-            $table->index('collection_id'); // Fast "get all products in collection" queries
-            $table->index('product_id'); // Fast "get all collections for product" queries
-            $table->unique(['collection_id', 'product_id']); // Prevent duplicate relationships
+            $table->index('collection_id');
+            $table->index('product_id');
+            $table->unique(['collection_id', 'product_id']);
         });
     }
 
