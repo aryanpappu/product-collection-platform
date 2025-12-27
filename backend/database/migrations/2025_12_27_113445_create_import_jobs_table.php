@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -27,10 +26,10 @@ return new class extends Migration
             $table->timestamps();
 
             // Indexes for performance
-            $table->index('merchant_id'); // Per-merchant job history
-            $table->index(['merchant_id', 'status']); // Active jobs per merchant
-            $table->index('status'); // Global job status monitoring
-            $table->index('created_at'); // Recent jobs queries
+            $table->index('merchant_id');
+            $table->index(['merchant_id', 'status']);
+            $table->index('status');
+            $table->index('created_at');
         });
     }
 

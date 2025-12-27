@@ -12,6 +12,14 @@ class Collection extends Model
         'merchant_id',
         'name',
         'description',
+        'slug',
+        'is_active',
+        'products_count',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'products_count' => 'integer',
     ];
 
     public function merchant(): BelongsTo
@@ -22,6 +30,7 @@ class Collection extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'collection_product')
-            ->withTimestamps();
+            ->withPivot(['position', 'added_at'])
+            ->orderByPivot('position');
     }
 }
