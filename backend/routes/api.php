@@ -25,5 +25,11 @@ Route::middleware('merchant.context')->group(function () {
         Route::delete('/{id}', [CollectionController::class, 'destroy']);
         Route::post('/{id}/products/bulk-add', [CollectionController::class, 'bulkAddProducts']);
         Route::post('/{id}/products/bulk-remove', [CollectionController::class, 'bulkRemoveProducts']);
+
+        // CSV Upload Routes
+        Route::post('/{id}/upload-csv', [CollectionController::class, 'uploadCsv']);
+        Route::get('/{id}/operations', [CollectionController::class, 'listOperations']);
+        Route::get('/{id}/operations/{operationId}', [CollectionController::class, 'getOperationStatus']);
+        Route::get('/{id}/operations/{operationId}/errors', [CollectionController::class, 'getOperationErrors']);
     });
 });

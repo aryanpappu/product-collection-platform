@@ -3,12 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CollectionOperationUploadRequest;
 use App\Http\Requests\CollectionRequest;
 use App\Jobs\BulkAddProductsToCollectionJob;
 use App\Jobs\BulkRemoveProductsFromCollectionJob;
+use App\Jobs\ProcessCollectionOperationJob;
 use App\Models\Collection;
+use App\Models\CollectionOperationJob;
+use App\Services\CollectionCsvProcessor;
+use App\Validators\CollectionOperationValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CollectionController extends Controller
@@ -171,6 +177,125 @@ class CollectionController extends Controller
     }
 
 
+    public function uploadCsv(CollectionOperationUploadRequest $request, int $id): JsonResponse
+    {
+        $merchantId = $this->getMerchantId($request);
+        $collection = $this->findCollection($id, $merchantId);
+
+        if (!$collection) {
+            return $this->notFoundResponse('Collection not found');
+        }
+
+        try {
+            $file = $request->file('file');
+            $operationType = $request->input('operation_type');
+            $filename = $file->getClientOriginalName();
+
+            $filePath = $file->storeAs(
+                "collection-operations/merchant-{$merchantId}",
+                uniqid('operation_') . '_' . $filename,
+                'local'
+            );
+
+            $processor = new CollectionCsvProcessor(
+                Storage::path($filePath),
+                new CollectionOperationValidator()
+            );
+            $totalRows = $processor->countRows();
+
+            $operationJob = CollectionOperationJob::create([
+                'merchant_id' => $merchantId,
+                'collection_id' => $collection->id,
+                'operation_type' => $operationType,
+                'filename' => $filename,
+                'file_path' => $filePath,
+                'total_rows' => $totalRows,
+                'status' => 'queued',
+            ]);
+
+            ProcessCollectionOperationJob::dispatch($operationJob);
+
+            return $this->successResponse(
+                $this->formatOperationJob($operationJob),
+                'CSV upload successful. Processing started.',
+                202
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Failed to upload CSV: ' . $e->getMessage(),
+                500
+            );
+        }
+    }
+
+
+    public function listOperations(Request $request, int $id): JsonResponse
+    {
+        $merchantId = $this->getMerchantId($request);
+        $collection = $this->findCollection($id, $merchantId);
+
+        if (!$collection) {
+            return $this->notFoundResponse('Collection not found');
+        }
+
+        $operations = CollectionOperationJob::where('collection_id', $id)
+            ->where('merchant_id', $merchantId)
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return $this->paginatedResponse($operations, fn($operation) => $this->formatOperationJob($operation));
+    }
+
+
+    public function getOperationStatus(Request $request, int $id, int $operationId): JsonResponse
+    {
+        $merchantId = $this->getMerchantId($request);
+        $collection = $this->findCollection($id, $merchantId);
+
+        if (!$collection) {
+            return $this->notFoundResponse('Collection not found');
+        }
+
+        $operation = CollectionOperationJob::where('id', $operationId)
+            ->where('collection_id', $id)
+            ->where('merchant_id', $merchantId)
+            ->first();
+
+        if (!$operation) {
+            return $this->notFoundResponse('Operation not found');
+        }
+
+        return $this->successResponse($this->formatOperationJobDetails($operation));
+    }
+
+
+    public function getOperationErrors(Request $request, int $id, int $operationId): JsonResponse
+    {
+        $merchantId = $this->getMerchantId($request);
+        $collection = $this->findCollection($id, $merchantId);
+
+        if (!$collection) {
+            return $this->notFoundResponse('Collection not found');
+        }
+
+        $operation = CollectionOperationJob::where('id', $operationId)
+            ->where('collection_id', $id)
+            ->where('merchant_id', $merchantId)
+            ->first();
+
+        if (!$operation) {
+            return $this->notFoundResponse('Operation not found');
+        }
+
+        $errors = $operation->logs()
+            ->orderBy('row_number', 'asc')
+            ->paginate(50);
+
+        return $this->paginatedResponse($errors, fn($error) => $this->formatOperationError($error));
+    }
+
+
     private function getMerchantId(Request $request): int
     {
         return $request->attributes->get('merchant_id');
@@ -240,5 +365,63 @@ class CollectionController extends Controller
         }
 
         return $query->exists();
+    }
+
+
+    private function formatOperationJob(CollectionOperationJob $operation): array
+    {
+        return [
+            'id' => $operation->id,
+            'collection_id' => $operation->collection_id,
+            'operation_type' => $operation->operation_type,
+            'filename' => $operation->filename,
+            'status' => $operation->status,
+            'total_rows' => $operation->total_rows,
+            'processed_rows' => $operation->processed_rows,
+            'successful_rows' => $operation->successful_rows,
+            'failed_rows' => $operation->failed_rows,
+            'stock_added' => $operation->stock_added,
+            'stock_removed' => $operation->stock_removed,
+            'progress_percentage' => $operation->getProgressPercentage(),
+            'created_at' => $operation->created_at->toIso8601String(),
+            'started_at' => $operation->started_at?->toIso8601String(),
+            'completed_at' => $operation->completed_at?->toIso8601String(),
+        ];
+    }
+
+
+    private function formatOperationJobDetails(CollectionOperationJob $operation): array
+    {
+        return [
+            'id' => $operation->id,
+            'collection_id' => $operation->collection_id,
+            'collection_name' => $operation->collection->name,
+            'operation_type' => $operation->operation_type,
+            'filename' => $operation->filename,
+            'status' => $operation->status,
+            'total_rows' => $operation->total_rows,
+            'processed_rows' => $operation->processed_rows,
+            'successful_rows' => $operation->successful_rows,
+            'failed_rows' => $operation->failed_rows,
+            'stock_added' => $operation->stock_added,
+            'stock_removed' => $operation->stock_removed,
+            'progress_percentage' => $operation->getProgressPercentage(),
+            'created_at' => $operation->created_at->toIso8601String(),
+            'started_at' => $operation->started_at?->toIso8601String(),
+            'completed_at' => $operation->completed_at?->toIso8601String(),
+        ];
+    }
+
+
+    private function formatOperationError($error): array
+    {
+        return [
+            'id' => $error->id,
+            'row_number' => $error->row_number,
+            'row_data' => $error->row_data,
+            'error_type' => $error->error_type,
+            'error_message' => $error->error_message,
+            'created_at' => $error->created_at->toIso8601String(),
+        ];
     }
 }
