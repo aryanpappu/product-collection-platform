@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\CollectionController;
+use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\ProductImportController;
 use Illuminate\Support\Facades\Route;
 
+// Public routes (no merchant context required)
+Route::get('/merchants', [MerchantController::class, 'index']);
 // Routes requiring merchant context (X-Merchant-ID header)
 Route::middleware('merchant.context')->group(function () {
     Route::prefix('imports')->group(function () {
