@@ -1,0 +1,8 @@
+product_id,sku,stock
+1,LAPTOP-001,50
+,PHONE-002,
+3,,75
+abc,INVALID-SKU,100
+5,KEYBOARD-005,-50
+,,-10
+6,VALID-SKU,200
